@@ -1,0 +1,117 @@
+short sens[6] = { A0, A1, A2, A3, A6, A7 }, s[6];
+long base[6] = { 100000, 10000, 1000, 100, 10, 1 }, sensor;
+byte m[4] = { 6, 5, 10, 9 };
+byte sw = 12, spd = 18;
+
+byte servoPin1 = 2;
+byte servoPin2 = 4;
+
+byte stationCount = 0;
+bool doorOpen = false;
+unsigned long doorTimer = 0;
+const unsigned int doorDelay = 2000;
+
+// Manual servo pulse — no Servo.h needed
+void servoWrite(byte pin, byte angle) {
+  int pulseWidth = map(angle, 0, 180, 544, 2400);
+  for (byte i = 0; i < 30; i++) {   // send 30 pulses to lock position
+    digitalWrite(pin, HIGH);
+    delayMicroseconds(pulseWidth);
+    digitalWrite(pin, LOW);
+    delayMicroseconds(20000 - pulseWidth);
+  }
+}
+
+void setup() {
+  for (byte i = 0; i < 6; i++) {
+    pinMode(sens[i], INPUT);
+  }
+  for (byte i = 0; i < 4; i++) {
+    pinMode(m[i], OUTPUT);
+  }
+  pinMode(sw, INPUT_PULLUP);
+  pinMode(servoPin1, OUTPUT);
+  pinMode(servoPin2, OUTPUT);
+
+  // Close both doors at start
+  servoWrite(servoPin1, 0);
+  servoWrite(servoPin2, 0);
+
+  while (1) {
+    if (!digitalRead(sw)) break;
+  }
+}
+
+void loop() {
+  reading();
+
+  if (sensor == 111111) {
+    go(0, 0);
+
+    if (!doorOpen) {
+      stationCount++;
+
+      if (stationCount == 1) {
+        servoWrite(servoPin1, 90);
+      } else if (stationCount == 2) {
+        servoWrite(servoPin2, 90);
+      }
+
+      doorOpen = true;
+      doorTimer = millis();
+    }
+
+    if (doorOpen && (millis() - doorTimer >= doorDelay)) {
+      servoWrite(servoPin1, 0);
+      servoWrite(servoPin2, 0);
+      doorOpen = false;
+
+      go(8, 8);
+      delay(400);
+    }
+
+    return;
+  }
+
+  if (sensor == 1100) go(8, 8);
+
+  else if (sensor == 1000) go(6, 8);
+  else if (sensor == 11000) go(3, 9);
+  else if (sensor == 10000) go(0, 10);
+  else if (sensor == 110000) go(-5, 10);
+  else if (sensor == 100000) go(-10, 10);
+
+  else if (sensor == 100) go(8, 6);
+  else if (sensor == 110) go(9, 3);
+  else if (sensor == 10) go(10, 0);
+  else if (sensor == 11) go(10, -5);
+  else if (sensor == 1) go(10, -10);
+
+  else go(0, 0);
+}
+
+void go(short l, short r) {
+  if (l >= 0) {
+    analogWrite(m[0], l * spd);
+    analogWrite(m[1], 0);
+  } else {
+    analogWrite(m[1], abs(l) * spd);
+    analogWrite(m[0], 0);
+  }
+  if (r >= 0) {
+    analogWrite(m[2], r * spd);
+    analogWrite(m[3], 0);
+  } else {
+    analogWrite(m[3], abs(r) * spd);
+    analogWrite(m[2], 0);
+  }
+}
+
+void reading() {
+  sensor = 0;
+  for (byte i = 0; i < 6; i++) {
+    s[i] = analogRead(sens[i]);
+    (s[i] > 400) ? s[i] = 1 : s[i] = 0;
+    sensor += base[i] * s[i];
+  }
+}
